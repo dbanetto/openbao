@@ -158,6 +158,9 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 	if errorResp != nil {
 		return errorResp, nil
 	}
+	// As a Root CA there are no bounds beyond the mount limits
+	role.NotAfterBound = PermitNotAfterBound.String()
+	role.NotBeforeBound = PermitNotBeforeBound.String()
 
 	maxPathLengthIface, ok := data.GetOk("max_path_length")
 	if ok {

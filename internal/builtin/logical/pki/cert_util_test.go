@@ -262,7 +262,7 @@ func TestPki_getCertificateNotAfter_PastDate(t *testing.T) {
 
 	b, _ := CreateBackendWithStorage(t)
 
-	// Create a CA certificate with NotAfter in the future
+	// Create a CA certificate with NotAfter in the past
 	now := time.Now()
 	caCert := &x509.Certificate{
 		NotBefore: now.Add(-48 * time.Hour),
@@ -301,5 +301,57 @@ func TestPki_getCertificateNotAfter_PastDate(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot satisfy request, as NotAfter date")
 	require.True(t, time.Time{}.Equal(result))
+	require.Empty(t, warnings)
+}
+
+func TestPki_getCertificateNotBefore_FutureDate(t *testing.T) {
+	t.Parallel()
+
+	b, _ := CreateBackendWithStorage(t)
+
+	// Create a CA certificate with NotAfter in the past
+	now := time.Now()
+	caCert := &x509.Certificate{
+		NotBefore: now.Add(1 * time.Hour),
+		NotAfter:  now.Add(2 * time.Hour),
+	}
+
+	// Test case for future NotBefore and NotAfter date
+	data := &inputBundle{
+		role: &roleEntry{
+			MaxTTL:         24 * time.Hour,
+			TTL:            0,
+			NotBeforeBound: PermitNotBeforeBound.String(),
+			NotAfterBound:  PermitNotAfterBound.String(),
+		},
+		apiData: &framework.FieldData{
+			Raw: map[string]any{
+				"not_before": now.Add(1 * time.Hour).Format(time.RFC3339),
+				"not_after":  now.Add(2 * time.Hour).Format(time.RFC3339),
+				"ttl":        0,
+			},
+			Schema: map[string]*framework.FieldSchema{
+				"not_after": {Type: framework.TypeString},
+				"ttl":       {Type: framework.TypeDurationSecond},
+				"format":    {Type: framework.TypeString},
+			},
+		},
+	}
+
+	caBundle := &certutil.CAInfoBundle{
+		ParsedCertBundle: certutil.ParsedCertBundle{
+			Certificate: caCert,
+		},
+		LeafNotAfterBehavior: certutil.TruncateNotAfterBehavior,
+	}
+
+	resultNotBefore, err := getCertificateNotBefore(data)
+	require.Nil(t, err)
+	require.True(t, caCert.NotBefore.Equal(resultNotBefore))
+
+	// Test that we get an error when NotAfter is in the past
+	result, warnings, err := getCertificateNotAfter(b, data, caBundle)
+	require.Nil(t, err)
+	require.True(t, caCert.NotAfter.Equal(result))
 	require.Empty(t, warnings)
 }
